@@ -1,0 +1,27 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: tag matches version.go
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(sed -n 's/^const Version = "\(.*\)"$/\1/p' version.go)"
+          if [ "$tag" != "$version" ]; then
+            echo "tag v$tag does not match Version $version in version.go" >&2
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go test -race ./...
