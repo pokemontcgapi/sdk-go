@@ -230,6 +230,9 @@ func TestResponseInfo(t *testing.T) {
 	if strings.Join(info.PlanWithheld, "|") != "graded|non_english_locales" {
 		t.Errorf("withheld: %v", info.PlanWithheld)
 	}
+	if info.CardsLimit == nil || *info.CardsLimit != 1000 || info.CardsUsed == nil || *info.CardsUsed != 37 {
+		t.Errorf("cards: %+v", info)
+	}
 	if !strings.HasSuffix(info.URL, "/v1/cards/bs-4?include=prices") {
 		t.Errorf("url: %s", info.URL)
 	}
@@ -242,8 +245,8 @@ func TestResponseInfo(t *testing.T) {
 	if _, err := c2.Health(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if info := c2.LastResponse(); info.CreditsCost != nil || len(info.PlanWithheld) != 0 {
-		t.Errorf("non-numeric header must be nil, absent withheld empty: %+v", info)
+	if info := c2.LastResponse(); info.CreditsCost != nil || len(info.PlanWithheld) != 0 || info.CardsLimit != nil || info.CardsUsed != nil {
+		t.Errorf("non-numeric header must be nil, absent withheld empty, absent cards nil: %+v", info)
 	}
 }
 
@@ -777,7 +780,7 @@ func TestReferenceSingleRequest(t *testing.T) {
 func TestVisionMultipart(t *testing.T) {
 	srv := fixtureServer(t, "vision-ambiguous")
 	c := newClient(srv)
-	resp, err := c.Vision.Identify(context.Background(), bytes.NewReader([]byte("\xff\xd8jpeg")), &IdentifyOptions{TopK: 5, Set: "sv3"})
+	resp, err := c.Vision.Identify(context.Background(), bytes.NewReader([]byte("\xff\xd8jpeg")), &IdentifyOptions{TopK: 5, Set: "sv3", Include: []string{"index", "prices"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -801,7 +804,7 @@ func TestVisionMultipart(t *testing.T) {
 	if len(image) != 1 || image[0].Filename != "card" || image[0].Size != 6 {
 		t.Errorf("image part: %+v", image)
 	}
-	if form.Value["top_k"][0] != "5" || form.Value["set"][0] != "sv3" || len(form.Value["region"]) != 0 {
+	if form.Value["top_k"][0] != "5" || form.Value["set"][0] != "sv3" || form.Value["include"][0] != "index,prices" || len(form.Value["region"]) != 0 {
 		t.Errorf("fields: %v", form.Value)
 	}
 

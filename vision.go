@@ -6,11 +6,12 @@ import (
 	"io"
 	"mime/multipart"
 	"strconv"
+	"strings"
 )
 
 // VisionService recognises a card from a photograph.
 //
-// It costs 25 credits a call against 1 for a read: it is the only route that
+// It costs 25 base credits a call; index adds 1 and prices 4 for top_k <= 10. It is the only route that
 // does not return a row but the outcome of a comparison against the whole
 // image index. Worth knowing before putting it in a loop.
 type VisionService struct{ client *Client }
@@ -46,6 +47,11 @@ func (s *VisionService) Identify(ctx context.Context, image io.Reader, opts *Ide
 		}
 		if opts.Region != "" {
 			if err := w.WriteField("region", opts.Region); err != nil {
+				return nil, err
+			}
+		}
+		if len(opts.Include) > 0 {
+			if err := w.WriteField("include", strings.Join(opts.Include, ",")); err != nil {
 				return nil, err
 			}
 		}

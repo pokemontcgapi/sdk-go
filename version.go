@@ -10,6 +10,6 @@ package pokemontcgapi
 
 // Version is the SDK version. It travels in the User-Agent header of every
 // request and must match the git tag of a release.
-const Version = "0.1.0"
+const Version = "0.1.1"
 
 const defaultUserAgent = "pokemontcgapi-go/" + Version

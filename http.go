@@ -34,6 +34,12 @@ type ResponseInfo struct {
 	PlanWithheld       []string
 	// TrialExpiresAt is set on trial keys only.
 	TrialExpiresAt string
+	// CardsLimit and CardsUsed are the distinct-card allowance of the period
+	// and the cards already retrieved BEFORE this response; nil from Growth
+	// up, where there is no allowance. A 403 CARD_ALLOWANCE_EXCEEDED comes
+	// when CardsUsed is at the limit and the request would add new cards.
+	CardsLimit *int
+	CardsUsed  *int
 }
 
 func headerInt(h http.Header, name string) *int {
@@ -62,6 +68,8 @@ func toResponseInfo(rawURL string, resp *http.Response) *ResponseInfo {
 		RateLimitRemaining: headerInt(h, "RateLimit-Remaining"),
 		PlanWithheld:       []string{},
 		TrialExpiresAt:     h.Get("X-Trial-Expires-At"),
+		CardsLimit:         headerInt(h, "X-Cards-Limit"),
+		CardsUsed:          headerInt(h, "X-Cards-Used"),
 	}
 	if withheld := h.Get("X-Plan-Withheld"); withheld != "" {
 		for _, v := range strings.Split(withheld, ",") {

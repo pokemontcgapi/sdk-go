@@ -65,6 +65,8 @@ const (
 
 // Grading is the company and score of a graded copy.
 type Grading struct {
+	// Company is empty when the source publishes a grade band valid for any
+	// grader (PriceCharting's "grade 9"). A graded row is Grading != nil.
 	Company string `json:"company"`
 	Score   string `json:"score"`
 }
@@ -727,8 +729,11 @@ type VisionCandidate struct {
 		Name        string `json:"name"`
 		PrintRegion string `json:"print_region"`
 	} `json:"set"`
-	Rarity   *string `json:"rarity"`
-	ImageURL *string `json:"image_url"`
+	Rarity      *string  `json:"rarity"`
+	ImageURL    *string  `json:"image_url"`
+	IndexEUR    *float64 `json:"index_eur,omitempty"`
+	LastPriceAt *string  `json:"last_price_at,omitempty"`
+	Prices      []Price  `json:"prices,omitempty"`
 	// Distance is a Hamming distance, 0..512: real matches sit under 150 even on a noisy photo, and nothing above 170 is returned.
 	Distance int `json:"distance"`
 	// Confidence is the same information rescaled to 0..1.
@@ -770,8 +775,9 @@ type VisionMeta struct {
 
 // VisionResponse is the answer of Vision.Identify.
 type VisionResponse struct {
-	Data VisionResult `json:"data"`
-	Meta VisionMeta   `json:"meta"`
+	Data     VisionResult `json:"data"`
+	Meta     VisionMeta   `json:"meta"`
+	Withheld []string     `json:"withheld,omitempty"`
 }
 
 // IdentifyOptions narrow a photo recognition.
@@ -782,4 +788,6 @@ type IdentifyOptions struct {
 	Set string
 	// Region restricts to a print region. Same purpose.
 	Region string
+	// Include accepts index and prices, alone or together.
+	Include []string
 }
