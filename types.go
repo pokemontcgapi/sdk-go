@@ -279,7 +279,7 @@ type Collection[T any] struct {
 // MissingCard is one id a batch could not resolve.
 type MissingCard struct {
 	ID string `json:"id"`
-	// SuggestedID is present only for an existing historical alias in a different canonical set.
+	// SuggestedID is present only when the API identifies an existing candidate for an unresolved id.
 	SuggestedID string `json:"suggested_id,omitempty"`
 }
 
@@ -790,4 +790,219 @@ type IdentifyOptions struct {
 	Region string
 	// Include accepts index and prices, alone or together.
 	Include []string
+}
+
+// Centering types are hand-written from the TypeScript SDK in field order.
+type CenteringFace = string
+type CenteringSize = string
+type CenteringHouse = string
+type CenteringSourceStatus = string
+type CenteringAxisName = string
+
+type CenteringPoint struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+type CenteringCorners = [4]CenteringPoint
+type CenteringDimensions struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+type CenteringRectified struct {
+	CenteringDimensions
+	Rotations    int `json:"rotations"`
+	CornerOffset int `json:"corner_offset"`
+}
+type CenteringLine struct {
+	Intercept float64 `json:"intercept"`
+	Slope     float64 `json:"slope"`
+}
+type CenteringLineGroup struct {
+	Left   CenteringLine `json:"left"`
+	Right  CenteringLine `json:"right"`
+	Top    CenteringLine `json:"top"`
+	Bottom CenteringLine `json:"bottom"`
+}
+type CenteringLines struct {
+	Cut   CenteringLineGroup `json:"cut"`
+	Print CenteringLineGroup `json:"print"`
+}
+type CenteringGeometry struct {
+	GeometryVersion  int                 `json:"geometry_version"`
+	Image            CenteringDimensions `json:"image"`
+	Corners          CenteringCorners    `json:"corners"`
+	Rectified        CenteringRectified  `json:"rectified"`
+	Lines            CenteringLines      `json:"lines"`
+	CardSize         CenteringSize       `json:"card_size"`
+	Warnings         []string            `json:"warnings"`
+	PositioningSigma *float64            `json:"positioning_sigma,omitempty"`
+}
+type CenteringCeiling struct {
+	MaximumGrade   *float64              `json:"maximum_grade"`
+	Label          *string               `json:"label"`
+	Rank           *float64              `json:"rank"`
+	LimitingFace   CenteringFace         `json:"limiting_face"`
+	LimitingAxis   CenteringAxisName     `json:"limiting_axis"`
+	DistanceToNext *float64              `json:"distance_to_next"`
+	NextGrade      *float64              `json:"next_grade"`
+	NextLabel      *string               `json:"next_label"`
+	Borderline     bool                  `json:"borderline"`
+	Unconstrained  bool                  `json:"unconstrained"`
+	SourceStatus   CenteringSourceStatus `json:"source_status"`
+	StandardStatus CenteringSourceStatus `json:"standard_status"`
+	Source         string                `json:"source"`
+	Sources        []string              `json:"sources"`
+	ReviewedAt     string                `json:"reviewed_at"`
+	Verification   string                `json:"verification"`
+}
+type CenteringAxis struct {
+	Ratio                string    `json:"ratio"`
+	MajorPercent         float64   `json:"major_percent"`
+	MinorPercent         float64   `json:"minor_percent"`
+	UncertaintyPP        float64   `json:"uncertainty_pp"`
+	SigmaPP              float64   `json:"sigma_pp"`
+	WorstStationPX       float64   `json:"worst_station_px"`
+	StationsMajorPercent []float64 `json:"stations_major_percent"`
+}
+type CenteringNormalization struct {
+	Field string  `json:"field"`
+	Input any     `json:"input,omitempty"` // number or string
+	Ratio *string `json:"ratio,omitempty"`
+	Note  string  `json:"note"`
+}
+type CenteringMeasureResult struct {
+	Status         string                              `json:"status"` // ok, needs-review or failed
+	Code           string                              `json:"code"`
+	Face           CenteringFace                       `json:"face"`
+	CardSize       CenteringSize                       `json:"card_size"`
+	LR             *CenteringAxis                      `json:"lr"`
+	TB             *CenteringAxis                      `json:"tb"`
+	Confidence     *float64                            `json:"confidence"`
+	Warnings       []string                            `json:"warnings"`
+	Ceilings       map[CenteringHouse]CenteringCeiling `json:"ceilings"` // nil on needs-review/failed
+	Advice         string                              `json:"advice"`
+	ElapsedMS      float64                             `json:"elapsed_ms"`
+	Normalizations []CenteringNormalization            `json:"normalizations"`
+	ImageBytes     int                                 `json:"image_bytes"`
+	Summary        string                              `json:"summary"`
+	Disclaimer     string                              `json:"disclaimer"`
+	Geometry       *CenteringGeometry                  `json:"geometry,omitempty"`
+}
+
+// Confirm has no geometry; keep the geometry the person reviewed in your app.
+type CenteringConfirmResult struct {
+	Status         string                              `json:"status"`
+	Code           string                              `json:"code"`
+	Face           CenteringFace                       `json:"face"`
+	CardSize       CenteringSize                       `json:"card_size"`
+	LR             *CenteringAxis                      `json:"lr"`
+	TB             *CenteringAxis                      `json:"tb"`
+	Confidence     *float64                            `json:"confidence"`
+	Warnings       []string                            `json:"warnings"`
+	Ceilings       map[CenteringHouse]CenteringCeiling `json:"ceilings"`
+	Advice         string                              `json:"advice"`
+	ElapsedMS      float64                             `json:"elapsed_ms"`
+	Normalizations []CenteringNormalization            `json:"normalizations"`
+	ImageBytes     int                                 `json:"image_bytes"`
+	Summary        string                              `json:"summary"`
+	Disclaimer     string                              `json:"disclaimer"`
+	Basis          string                              `json:"basis"`
+}
+type CenteringMeta struct {
+	ElapsedMS     float64 `json:"elapsed_ms"`
+	EngineVersion string  `json:"engine_version"`
+}
+type CenteringMeasureResponse struct {
+	Data CenteringMeasureResult `json:"data"`
+	Meta CenteringMeta          `json:"meta"`
+}
+type CenteringConfirmResponse struct {
+	Data CenteringConfirmResult `json:"data"`
+	Meta CenteringMeta          `json:"meta"`
+}
+type CenteringMeasureOptions struct {
+	Face     CenteringFace     `json:"face"`
+	CardSize CenteringSize     `json:"card_size,omitempty"`
+	Corners  *CenteringCorners `json:"corners,omitempty"`
+}
+type CenteringConfirmInput struct {
+	Face        CenteringFace     `json:"face"`
+	CardSize    CenteringSize     `json:"card_size"`
+	Geometry    CenteringGeometry `json:"geometry"`
+	ConfirmedBy string            `json:"confirmed_by"` // must be person
+}
+
+// CenteringRatio accepts a number, string, or two-element number/string array.
+// Numeric zero is preserved when supplied as an interface value.
+type CenteringRatio = any
+type CenteringKnownFace struct {
+	LR CenteringRatio `json:"lr,omitempty"`
+	TB CenteringRatio `json:"tb,omitempty"`
+}
+type CenteringGradeInput struct {
+	FrontLR CenteringRatio      `json:"front_lr,omitempty"`
+	FrontTB CenteringRatio      `json:"front_tb,omitempty"`
+	BackLR  CenteringRatio      `json:"back_lr,omitempty"`
+	BackTB  CenteringRatio      `json:"back_tb,omitempty"`
+	Front   *CenteringKnownFace `json:"front,omitempty"`
+	Back    *CenteringKnownFace `json:"back,omitempty"`
+	House   CenteringHouse      `json:"house,omitempty"`
+}
+type CenteringRatios struct {
+	LR *float64 `json:"lr"`
+	TB *float64 `json:"tb"`
+}
+type CenteringFaceGrade struct {
+	Ratios      CenteringRatios                     `json:"ratios"`
+	MissingAxes []CenteringAxisName                 `json:"missing_axes"`
+	Ceilings    map[CenteringHouse]CenteringCeiling `json:"ceilings"`
+}
+type CenteringGradeResult struct {
+	Front          *CenteringFaceGrade                 `json:"front"`
+	Back           *CenteringFaceGrade                 `json:"back"`
+	Combined       map[CenteringHouse]CenteringCeiling `json:"combined"`
+	Normalizations []CenteringNormalization            `json:"normalizations"`
+	Incomplete     bool                                `json:"incomplete"`
+	MissingFaces   []CenteringFace                     `json:"missing_faces"`
+	Summary        string                              `json:"summary"`
+	Disclaimer     string                              `json:"disclaimer"`
+}
+type CenteringGradeResponse struct {
+	Data CenteringGradeResult `json:"data"`
+	Meta CenteringMeta        `json:"meta"`
+}
+type CenteringBand struct {
+	Value  float64               `json:"value"`
+	Label  string                `json:"label"`
+	Rank   float64               `json:"rank"`
+	Loose  float64               `json:"loose"`
+	Tight  *float64              `json:"tight,omitempty"`
+	Status CenteringSourceStatus `json:"status"`
+}
+type CenteringStandard struct {
+	House        CenteringHouse        `json:"house"`
+	Face         CenteringFace         `json:"face"`
+	Bands        []CenteringBand       `json:"bands"`
+	Source       string                `json:"source"`
+	Sources      []string              `json:"sources"`
+	Status       CenteringSourceStatus `json:"status"`
+	ReviewedAt   string                `json:"reviewed_at"`
+	Verification string                `json:"verification"`
+	Note         string                `json:"note"`
+}
+type CenteringStandardsResult struct {
+	Normalizations []CenteringNormalization `json:"normalizations"`
+	Standards      []CenteringStandard      `json:"standards"`
+	RoundingRule   string                   `json:"rounding_rule"`
+	TagNote        string                   `json:"tag_note"`
+	Summary        string                   `json:"summary"`
+	Disclaimer     string                   `json:"disclaimer"`
+}
+type CenteringStandardsResponse struct {
+	Data CenteringStandardsResult `json:"data"`
+	Meta CenteringMeta            `json:"meta"`
+}
+type CenteringStandardsOptions struct {
+	House CenteringHouse `json:"house,omitempty"`
+	Face  CenteringFace  `json:"face,omitempty"`
 }
