@@ -26,6 +26,7 @@ type Client struct {
 	Prices    *PricesService
 	Reference *ReferenceService
 	Vision    *VisionService
+	Centering *CenteringService
 
 	baseURL    string
 	apiKey     string
@@ -94,6 +95,7 @@ func New(opts ...Option) *Client {
 	c.Prices = &PricesService{c}
 	c.Reference = &ReferenceService{client: c}
 	c.Vision = &VisionService{c}
+	c.Centering = &CenteringService{c}
 	return c
 }
 

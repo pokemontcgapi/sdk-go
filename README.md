@@ -116,10 +116,15 @@ result, err := client.Cards.Batch(ctx, []string{"sv8-116", "sv8-100", "inventato
 ```
 
 `Missing` is nil when every id resolves. Otherwise each unresolved id appears once
-as `MissingCard{ID, SuggestedID}`. A suggestion is included only for an existing historical candidate in a
-different canonical set. In this example only `sv8-100` is returned; `sv8-116` suggests `ssp-116`,
-and `inventato-xyz` has no suggestion. A canonical set prefix binds the lookup to that set;
-`base1-4` still resolves to `bs-4` because `base1` is only a historical alias.
+as `MissingCard{ID, SuggestedID}`. A suggestion is included only when the API can identify an existing candidate for an unresolved id.
+A complete native id takes precedence over a historical alias. If no native card has that exact id,
+the legacy alias resolves even when its prefix is a Japanese set code: `sm8-1` resolves to WEST
+`lot-1`, while `sm8-001` resolves to JP `sm8-001`. If an id is both native JP and legacy WEST,
+the native JP card wins; use the WEST native id to request the other card. The example returns
+JP `sv8-100`, then JP `sv8-116`, ordered by native id;
+`Requested` is 3, `Found` is 2, and `Missing` contains only `MissingCard{ID: "inventato-xyz"}`.
+The existing native JP `sv8-116` takes precedence over the WEST legacy alias for `ssp-116`.
+Numbers retain their zeros; `base1-4` resolves to `bs-4`.
 
 `Data` contains distinct cards. Repeated ids count towards `Requested` and credits, but do not
 repeat rows in `Data` or `Missing`. Two valid aliases for one card can make `Found` smaller than
@@ -181,6 +186,47 @@ Passing `Set` or `Region` when your workflow knows them is what resolves the tie
 
 It costs 25 credits a call against 1 for a lookup: it is the whole image index answering, not a row
 being read. Do not put it in a loop.
+
+#### Centering with person-reviewed lines
+
+Measure one face with `centering.measure`, display the ratios, uncertainty and geometry, then let a
+person inspect or move the cut and print lines in your app before calling `centering.confirm` with
+`confirmed_by: "person"`. A `needs-review` result without ceilings is expected. If the card corners
+are wrong, call measure again with corrected corners before reviewing the lines. Geometry uses
+EXIF-oriented image pixels reduced to at most 2560 px and rectified line coordinates including
+padding; preserve rotations, corner_offset, warnings and positioning_sigma when editing.
+
+Growth and higher; Developer is excluded. The verified Free trial includes 5 measure and 5 confirm
+calls, independently. Grade and standards have no separate trial call counter. Costs: measure 25,
+confirm 5, grade 1, standards 1 credits. Requires `vision:read`.
+
+```go
+measurement, err := client.Centering.Measure(ctx, photo, ptcg.CenteringMeasureOptions{Face: "front", CardSize: "standard"})
+if err != nil { log.Fatal(err) }
+if measurement.Data.Geometry == nil { log.Fatal("Retake the photo") }
+// Draw the geometry. In the person's explicit acceptance handler:
+reviewedGeometry := *measurement.Data.Geometry // use the line editor's corrected geometry
+confirmed, err := client.Centering.Confirm(ctx, ptcg.CenteringConfirmInput{
+    Face: measurement.Data.Face, CardSize: measurement.Data.CardSize,
+    Geometry: reviewedGeometry, ConfirmedBy: "person",
+})
+if err != nil { log.Fatal(err) }
+fmt.Println(confirmed.Data.Ceilings, confirmed.Data.Disclaimer)
+graded, err := client.Centering.Grade(ctx, ptcg.CenteringGradeInput{FrontLR: "55/45", FrontTB: 52})
+standards, err := client.Centering.Standards(ctx, &ptcg.CenteringStandardsOptions{House: "PSA", Face: "front"})
+```
+
+Confirm returns `basis: "client-confirmed-lines"`, not a certification. Always display:
+**ceiling from centering alone, not a prediction of the final grade**. Show source status and
+uncertainty. The other face or a missing axis may lower a ceiling. Confirm does not return geometry;
+keep the reviewed geometry in your app. For ratios already known, use `centering.grade`; use
+`centering.standards` for threshold bands and source URLs. Never guess a missing face or axis.
+
+Validation is `INVALID_PARAMETER`; service validation carries `details.service_code` and
+`details.param`. `PROVIDER_UNAVAILABLE` (503, Retry-After: 2) and `FEATURE_NOT_CONFIGURED` (503)
+indicate unavailable processing or a disabled deployment; `PLAN_REQUIRED` (403) indicates a plan,
+verification or trial-call restriction. Errors refund credits and trial reservations. POSTs are
+never retried by the SDK. See the [two-step guide](https://pokemontcgapi.com/docs/centering).
 
 ### Errors you can branch on
 
@@ -349,7 +395,7 @@ so a merged pull request travels back by hand rather than by merge button. That
 is not a reason to send patches elsewhere — open the issue or the PR here, it is
 the address that gets read.
 
-README synced from sdk-typescript README as of commit 86a725a.
+README synced from sdk-typescript README as of commit d33554a.
 
 ## Licence
 
