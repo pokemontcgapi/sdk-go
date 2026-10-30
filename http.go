@@ -40,6 +40,11 @@ type ResponseInfo struct {
 	// when CardsUsed is at the limit and the request would add new cards.
 	CardsLimit *int
 	CardsUsed  *int
+	// CardsWarning is X-Cards-Warning: "approaching_limit" on a successful
+	// response once CardsUsed has reached 80% of the allowance; empty
+	// otherwise, and always where there is no allowance. The raw header
+	// value, so a new value arrives instead of vanishing into a boolean.
+	CardsWarning string
 }
 
 func headerInt(h http.Header, name string) *int {
@@ -70,6 +75,7 @@ func toResponseInfo(rawURL string, resp *http.Response) *ResponseInfo {
 		TrialExpiresAt:     h.Get("X-Trial-Expires-At"),
 		CardsLimit:         headerInt(h, "X-Cards-Limit"),
 		CardsUsed:          headerInt(h, "X-Cards-Used"),
+		CardsWarning:       h.Get("X-Cards-Warning"),
 	}
 	if withheld := h.Get("X-Plan-Withheld"); withheld != "" {
 		for _, v := range strings.Split(withheld, ",") {

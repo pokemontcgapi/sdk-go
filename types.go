@@ -417,13 +417,18 @@ type SealedProduct struct {
 	Slug string `json:"slug"`
 	Name string `json:"name"`
 	// Kind is BOOSTER_BOX and the like.
-	Kind        string   `json:"kind"`
-	SetCode     *string  `json:"set_code"`
-	SetName     *string  `json:"set_name"`
-	ImageURL    *string  `json:"image_url"`
-	ReleaseDate *string  `json:"release_date"`
-	PackCount   *int     `json:"pack_count"`
-	Languages   []string `json:"languages"`
+	Kind        string  `json:"kind"`
+	SetCode     *string `json:"set_code"`
+	SetName     *string `json:"set_name"`
+	ImageURL    *string `json:"image_url"`
+	ReleaseDate *string `json:"release_date"`
+	PackCount   *int    `json:"pack_count"`
+	// Languages are the languages the product physically exists in (en, ja,
+	// zh, ...), not those of its name; empty where the catalogue does not hold
+	// them. The Simplified Chinese sealed line (273 products on 2026-10-30,
+	// cn-* sets) carries ["zh"]. The list has no language filter: read it
+	// here, and pass Set to narrow to one set when you know it.
+	Languages []string `json:"languages"`
 	// IndexEUR is on lists only with Include index; on the single product always.
 	IndexEUR    *float64 `json:"index_eur,omitempty"`
 	LastPriceAt *string  `json:"last_price_at,omitempty"`
@@ -497,7 +502,11 @@ type CardPrices struct {
 	Quotes []Price     `json:"quotes"`
 }
 
-// SealedPrices is the current quotes of one sealed product. Index is always nil: the composite index does not cover sealed products.
+// SealedPrices is the current quotes of one sealed product. Index is the
+// product's catalogue price (the same index_eur as on the product row) with
+// its date, SampleN nil and ByLocale empty, because it is not the card
+// composite; nil when the product has none. Every quote carries Locale, the
+// language the box is printed in (zh on the Simplified Chinese line).
 type SealedPrices struct {
 	SealedID string      `json:"sealed_id"`
 	Index    *PriceIndex `json:"index"`
@@ -734,7 +743,7 @@ type VisionCandidate struct {
 	IndexEUR    *float64 `json:"index_eur,omitempty"`
 	LastPriceAt *string  `json:"last_price_at,omitempty"`
 	Prices      []Price  `json:"prices,omitempty"`
-	// Distance is a Hamming distance, 0..512: real matches sit under 150 even on a noisy photo, and nothing above 170 is returned.
+	// Distance uses a common 0..512 scale, lower is closer: signature Hamming distance or round(cosine distance × 340), clamped to 0..512, for embeddings. Nothing above 170 is returned.
 	Distance int `json:"distance"`
 	// Confidence is the same information rescaled to 0..1.
 	Confidence float64 `json:"confidence"`

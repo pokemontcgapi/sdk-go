@@ -172,7 +172,7 @@ case pokemontcgapi.VisionMatch:
     // One candidate, close, and clear of the next.
     add(*resp.Data.ID)
 case pokemontcgapi.VisionAmbiguous:
-    // Two printings share this illustration. resp.Data.ID is nil on purpose.
+    // The evidence does not identify one printing. resp.Data.ID is nil on purpose.
     showPicker(resp.Data.Candidates)
 case pokemontcgapi.VisionNoMatch:
     askForABetterPhoto()
@@ -180,8 +180,9 @@ case pokemontcgapi.VisionNoMatch:
 ```
 
 Reprints and regional twins share their artwork, so artwork alone cannot name a printing — not here
-and not anywhere. The endpoint returns candidates with a `Distance` (0–512, lower is closer; real
-matches land well under 150) and refuses to pick when two are within a few bits of each other.
+and not anywhere. The endpoint returns candidates with a `Distance` (0–512, lower is closer;
+signature Hamming distance or round(cosine distance × 340), clamped to 0–512, for embeddings;
+nothing above 170 is returned) and refuses to pick when the evidence is inconclusive, even with a single embedding candidate.
 Passing `Set` or `Region` when your workflow knows them is what resolves the tie.
 
 It costs 25 credits a call against 1 for a lookup: it is the whole image index answering, not a row
@@ -255,6 +256,8 @@ are `*ConnectionError`, and a per-attempt timeout is a `*TimeoutError` that unwr
 
 Commercial refusals include `details.next_step`, exposed as the typed `err.NextStep()`. If `err.NextStep()` is not nil, show `err.Handoff()` and its URL to the account owner verbatim and do not retry. `err.ActionURL()` returns the URL for any action: `checkout_url` for subscribe, `manage_url` for upgrade, `verify_url` for email verification, or `contact_url` for sales and support. Show it alongside `err.Handoff()`. Upgrades point to the account page, where the owner opens the billing portal to change plan. `err.CheckoutURL()` remains a shortcut for subscribe only.
 
+Since 5 October 2026 the same refusals can carry `details.upgrade`: the cheapest plan that would have let the request through, with its list price in cents and a link. `err.Upgrade()` returns it only when it is well formed (`plan_code`, `plan_name`, `monthly_cents`, `currency`, `reason`, and optionally `checkout_url`, `manage_url`, `role`), and `err.UpgradeURL()` is the link: `checkout_url` for an account without a subscription, `manage_url` for one that already has one. It is advice, not the hand-off: `err.NextStep()` stays the sentence to show.
+
 ```go
 var apiErr *pokemontcgapi.APIError
 if errors.As(err, &apiErr) && apiErr.NextStep() != nil {
@@ -306,12 +309,31 @@ wider window returns `*UpgradeRequiredError`, whose `PermittedWindow()` says wha
 `Movers` below Growth returns `*PlanRequiredError`, and a trial past its 30 days returns
 `*TrialExpiredError` on every route that costs credits. Both unwrap to `*PermissionDeniedError`.
 
+Sealed products come in the same three print lines as cards. Each row of `client.Sealed.List(ctx, ...)` carries `languages`,
+the languages the box physically exists in; the Simplified Chinese line (273 products on 30 October
+2026, in the `cn-*` sets) carries `["zh"]`. The list has no language filter, so read the field, or pass
+`Set` when you know the set. `client.Sealed.Prices(ctx, id, nil)` returns `index` from the product's `index_eur` (`nil` when the
+product has none; `sample_n` `nil` and `by_locale` empty, because it is not the card composite) and
+quotes whose `locale` is the language the box is printed in: Cardmarket `LOW` and `TREND` under `zh`
+for the Chinese line, with the same 24-hour delay as every Cardmarket row. Rows under a locale other
+than `en` follow the plan rules of the cards.
+
+```go
+page, err := client.Sealed.List(ctx, &pokemontcgapi.SealedListParams{Limit: 250}) // 5 credits per page of 250
+for box, err := range page.All(ctx) {
+    if err == nil && slices.Contains(box.Languages, "zh") {
+        fmt.Println(box.ID, box.Name, *box.SetCode)
+    }
+}
+prices, err := client.Sealed.Prices(ctx, boxID, nil) // prices.Data.Index, prices.Data.Quotes[i].Locale
+```
+
 There is no printing filter on `Include: []string{"prices"}`: first edition, holofoil and graded rows come back together, so read
 `Printing`, `Condition` and `Grading` per row. `Basis` separates `GUIDE` (published upstream) from
 `DERIVED` (computed by us). `PTCG_INDEX` is a composite index in EUR carrying `SampleN`, and the same
 number sits on the card row as `IndexEUR` wherever we have enough observations to compute one: 51,636
 cards of 57,450 on 16 September 2026, so treat it as nullable. On a list or batch it comes with `Include: []string{"index"}`
-(the same 1 credit per 50 rows requested as the bare list), so a list still has a comparable number without a second request per card. Card and sealed lists are priced per 50 rows requested since 2026-09-30: the default page of 50 costs 1 credit, a page of 250 costs 5. Every card a plan below Growth retrieves counts towards its distinct-card allowance (1,000 for the whole trial, 30,000 a month on Developer); at the limit, cards already retrieved keep answering and a request adding new ones raises the 403 `CARD_ALLOWANCE_EXCEEDED` (a `PermissionDenied` error) with `next_step`. The `X-Cards-Limit` and `X-Cards-Used` headers say where you stand. Image URLs come signed and stay valid for at least a week: store the card id, not the URL.
+(the same 1 credit per 50 rows requested as the bare list), so a list still has a comparable number without a second request per card. Card and sealed lists are priced per 50 rows requested since 2026-09-30: the default page of 50 costs 1 credit, a page of 250 costs 5. Every card a plan below Growth retrieves counts towards its distinct-card allowance (1,000 for the whole trial, 30,000 a month on Developer); at the limit, cards already retrieved keep answering and a request adding new ones raises the 403 `CARD_ALLOWANCE_EXCEEDED` (a `PermissionDenied` error) with `next_step`. The `X-Cards-Limit` and `X-Cards-Used` headers say where you stand, and `X-Cards-Warning: approaching_limit` arrives on a successful response when you reach 80% of the allowance (`client.LastResponse().CardsWarning`). Image URLs come signed and stay valid for at least a week: store the card id, not the URL.
 
 What your plan withholds is named rather than hidden, but it is named in three different places, so
 read the one that matches the call you made:
@@ -395,7 +417,7 @@ so a merged pull request travels back by hand rather than by merge button. That
 is not a reason to send patches elsewhere — open the issue or the PR here, it is
 the address that gets read.
 
-README synced from sdk-typescript README as of commit d33554a.
+README synced from sdk-typescript README as of commit eb0b38b.
 
 ## Licence
 

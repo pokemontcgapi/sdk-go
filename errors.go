@@ -140,6 +140,70 @@ func (e *APIError) Handoff() string {
 	return ""
 }
 
+// Upgrade is the commercial advice attached to a refusal (details.upgrade,
+// since 2026-10-05): the cheapest plan that would have let the request
+// through, with its list price and the link to subscribe. It is advice and
+// does not change the outcome: NextStep remains the hand-off to the owner.
+type Upgrade struct {
+	PlanCode string
+	PlanName string
+	// MonthlyCents is the monthly list price, in cents of Currency.
+	MonthlyCents int64
+	Currency     string
+	// Reason says why this plan: credits, daily_cap, card_allowance,
+	// trial_expired, history, vision, centering, movers, graded_quotes,
+	// all_locales, api_keys, subscription_required.
+	Reason string
+	// CheckoutURL is for an account without a subscription yet; ManageURL for
+	// one that already has one, where the plan changes from the portal.
+	CheckoutURL string
+	ManageURL   string
+	// Role is "alternative" when the advice accompanies an offer that remains
+	// the main path.
+	Role string
+}
+
+// Upgrade returns details.upgrade when it is well formed, nil otherwise;
+// never a piece of it.
+func (e *APIError) Upgrade() *Upgrade {
+	raw, ok := e.Details["upgrade"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	code, okCode := raw["plan_code"].(string)
+	name, okName := raw["plan_name"].(string)
+	cents, okCents := raw["monthly_cents"].(float64)
+	currency, okCurrency := raw["currency"].(string)
+	reason, okReason := raw["reason"].(string)
+	if !okCode || !okName || !okCents || !okCurrency || !okReason {
+		return nil
+	}
+	for _, key := range []string{"checkout_url", "manage_url", "role"} {
+		if v, present := raw[key]; present {
+			if _, isString := v.(string); !isString {
+				return nil
+			}
+		}
+	}
+	return &Upgrade{
+		PlanCode: code, PlanName: name, MonthlyCents: int64(cents), Currency: currency, Reason: reason,
+		CheckoutURL: stringField(raw, "checkout_url"), ManageURL: stringField(raw, "manage_url"), Role: stringField(raw, "role"),
+	}
+}
+
+// UpgradeURL is the link of the advice: CheckoutURL, or ManageURL for an
+// account already subscribed. Empty when there is no advice.
+func (e *APIError) UpgradeURL() string {
+	u := e.Upgrade()
+	if u == nil {
+		return ""
+	}
+	if u.CheckoutURL != "" {
+		return u.CheckoutURL
+	}
+	return u.ManageURL
+}
+
 // AuthenticationError is a 401: the key is missing, malformed or revoked.
 type AuthenticationError struct{ *APIError }
 

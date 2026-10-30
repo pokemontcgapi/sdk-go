@@ -233,8 +233,32 @@ func TestResponseInfo(t *testing.T) {
 	if info.CardsLimit == nil || *info.CardsLimit != 1000 || info.CardsUsed == nil || *info.CardsUsed != 37 {
 		t.Errorf("cards: %+v", info)
 	}
+	if info.CardsWarning != "" {
+		t.Errorf("no warning header must read empty: %+v", info)
+	}
 	if !strings.HasSuffix(info.URL, "/v1/cards/bs-4?include=prices") {
 		t.Errorf("url: %s", info.URL)
+	}
+
+	// X-Cards-Warning travels raw, and a sealed product's prices carry the
+	// product's index_eur as Index and the printed language as Locale.
+	sealedSrv := fixtureServer(t, "prices-sealed-with-index")
+	sc := newClient(sealedSrv)
+	box, err := sc.Sealed.Prices(context.Background(), "cn-example-booster-box", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sealedSrv.requests[0].URL != "/v1/sealed/cn-example-booster-box/prices" {
+		t.Errorf("url: %s", sealedSrv.requests[0].URL)
+	}
+	if box.Data.SealedID != "cn-example-booster-box" || box.Data.Index == nil || box.Data.Index.EUR != 128.5 || box.Data.Index.SampleN != nil || len(box.Data.Index.ByLocale) != 0 {
+		t.Errorf("sealed index: %+v", box.Data.Index)
+	}
+	if len(box.Data.Quotes) != 2 || box.Data.Quotes[0].Locale == nil || *box.Data.Quotes[0].Locale != "zh" || box.Meta.Quotes != 2 {
+		t.Errorf("sealed quotes: %+v", box.Data.Quotes)
+	}
+	if w := sc.LastResponse(); w.CardsWarning != "approaching_limit" || w.CardsUsed == nil || *w.CardsUsed != 812 {
+		t.Errorf("warning: %+v", w)
 	}
 
 	srv2 := newServer(t, func(w http.ResponseWriter, r *http.Request, srv *testServer) {
@@ -426,6 +450,59 @@ func TestNextStepAccessors(t *testing.T) {
 		if mk(step).ActionURL() != "" {
 			t.Errorf("%s: non-string url must be empty", tc.action)
 		}
+	}
+}
+
+func TestUpgradeAccessor(t *testing.T) {
+	srv := fixtureServer(t, "403-card-allowance-upgrade")
+	c := newClient(srv)
+	_, err := c.Cards.Batch(context.Background(), []string{"bs-4", "bs-5", "bs-6"}, nil)
+	var denied *PermissionDeniedError
+	if !errors.As(err, &denied) || denied.Code != "CARD_ALLOWANCE_EXCEEDED" {
+		t.Fatalf("want PermissionDeniedError CARD_ALLOWANCE_EXCEEDED, got %v", err)
+	}
+	u := denied.Upgrade()
+	if u == nil || u.PlanCode != "GROWTH" || u.PlanName != "Growth" || u.MonthlyCents != 7900 || u.Currency != "EUR" || u.Reason != "card_allowance" {
+		t.Fatalf("upgrade: %+v", u)
+	}
+	if u.CheckoutURL != "https://example.test/subscribe?plan=growth&interval=monthly" || u.ManageURL != "" || u.Role != "" {
+		t.Errorf("urls: %+v", u)
+	}
+	if denied.UpgradeURL() != u.CheckoutURL {
+		t.Errorf("upgrade url: %q", denied.UpgradeURL())
+	}
+	// The advice does not replace the hand-off: next_step is still there.
+	if denied.Handoff() == "" || denied.CheckoutURL() == "" {
+		t.Errorf("next_step must survive the advice: %+v", denied.NextStep())
+	}
+
+	mk := func(upgrade any) *APIError {
+		var api *APIError
+		errors.As(toAPIError(429, errorBody{Code: "QUOTA_EXCEEDED", Message: "Exhausted", Details: map[string]any{"upgrade": upgrade}}, nil), &api)
+		return api
+	}
+	good := map[string]any{"plan_code": "GROWTH", "plan_name": "Growth", "monthly_cents": 7900.0, "currency": "EUR", "reason": "credits"}
+	with := func(k string, v any) map[string]any {
+		m := map[string]any{}
+		for key, val := range good {
+			m[key] = val
+		}
+		m[k] = v
+		return m
+	}
+	for _, malformed := range []any{nil, "wrong", map[string]any{}, with("monthly_cents", "79"), with("plan_code", 7.0), with("checkout_url", 42.0)} {
+		e := mk(malformed)
+		if e.Upgrade() != nil || e.UpgradeURL() != "" {
+			t.Errorf("malformed %v must yield nothing", malformed)
+		}
+	}
+	if mk(good).UpgradeURL() != "" {
+		t.Error("no url field must give an empty UpgradeURL")
+	}
+	m := with("manage_url", "https://example.test/account")
+	m["role"] = "alternative"
+	if e := mk(m); e.UpgradeURL() != "https://example.test/account" || e.Upgrade().Role != "alternative" {
+		t.Errorf("manage url: %+v", e.Upgrade())
 	}
 }
 

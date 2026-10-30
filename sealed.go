@@ -23,8 +23,9 @@ func (s *SealedService) Get(ctx context.Context, id string, p *SetGetParams) (*S
 	return &out, nil
 }
 
-// Prices returns the current quotes of a product. 2 credits. The composite
-// index does not cover sealed products: Data.Index is nil.
+// Prices returns the current quotes of a product. 2 credits. Data.Index is
+// the product's index_eur with its date, or nil when it has none; every quote
+// carries Locale, the language the box is printed in (zh on the Chinese line).
 func (s *SealedService) Prices(ctx context.Context, id string, p *PriceFilterParams) (*PricesResponse[SealedPrices], error) {
 	var out PricesResponse[SealedPrices]
 	if err := s.client.get(ctx, pathf("/v1/sealed/%s/prices", id), p.values(), &out); err != nil {
