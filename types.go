@@ -34,13 +34,16 @@ const (
 	RegionKR   = "KR"
 )
 
-// Price sources.
+// Price sources. SourceEbay rows are medians of active listings (basis ASKING);
+// SourceEbaySold rows are medians of completed sales (basis SOLD). Both are
+// graded rows, one per company and grade.
 const (
 	SourceTCGplayer     = "TCGPLAYER"
 	SourcePriceCharting = "PRICECHARTING"
 	SourceCardmarket    = "CARDMARKET"
 	SourceCardTrader    = "CARDTRADER"
 	SourceEbay          = "EBAY"
+	SourceEbaySold      = "EBAY_SOLD"
 	SourcePTCGIndex     = "PTCG_INDEX"
 	SourceCommunity     = "COMMUNITY"
 )
